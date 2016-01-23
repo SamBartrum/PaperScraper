@@ -1,164 +1,138 @@
-import urllib2
-from bs4 import BeautifulSoup
+from __future__ import unicode_literals
 from Tkinter import *
-import json
+from paper import Paper, Search
+import tkMessageBox
 
-INSP = Tk()
+class PSDisplay():
 
-font_style = "helvetica 16"
+	font_style = "helvetica 16"
 
-FN = Entry(INSP,highlightbackground= "black")
-SN = Entry(INSP,highlightbackground= "black")
-NoHits = Entry(INSP,highlightbackground= "black")
-FileName = Entry(INSP,highlightbackground= "black")
-FN.grid(row=2, column=1, padx = 10), SN.grid(row=3, column=1), NoHits.grid(row=4, column=1), FileName.grid(row=5, column=1)
+	def __init__(self, frame):
 
-Label(INSP, text="First Name", font=font_style).grid(row=2, ipadx = 30)
-Label(INSP, text="Second Name",font=font_style).grid(row=3)
-Label(INSP, text="Number of hits",font=font_style).grid(row=4)
-Label(INSP, text="File to write to",font=font_style).grid(row=5)
+		frame.title("PaperScraper")
+		self.populateWidget(frame)
 
-Label(INSP, text="Search Results",font=font_style).grid(column = 3, row = 1)
-Label(INSP, text="BibTex",font=font_style).grid(column = 4, row = 1)
+		# Stores the current search, allowing for it to be passed between methods
+		self.currentSearch = 0
+
+	def populateWidget(self,frame):	
+
+		self.FN = Entry(frame,highlightbackground= "black")
+		self.SN = Entry(frame,highlightbackground= "black")
+		self.NoHits = Entry(frame,highlightbackground= "black")
+		self.FileName = Entry(frame,highlightbackground= "black")
+		self.FN.grid(row=2, column=1), self.SN.grid(row=3, column=1), self.NoHits.grid(row=4, column=1, padx =20), self.FileName.grid(row=5, column=1)
+
+		Label(frame, text="First Name", font=PSDisplay.font_style).grid(row=2)
+		Label(frame, text="Second Name",font=PSDisplay.font_style).grid(row=3)
+		Label(frame, text="Number of hits",font=PSDisplay.font_style, padx =20 ).grid(row=4)
+		Label(frame, text="File to write to",font=PSDisplay.font_style).grid(row=5)
+		Label(frame, text="Papers",font=PSDisplay.font_style).grid(column = 3, row = 1)
+		Label(frame, text="BibTex",font=PSDisplay.font_style).grid(column = 4, row = 1)
+
+		self.Papers_widget = Listbox(frame,highlightbackground= "black", width = 40, borderwidth = 3)
+		self.Papers_widget.grid(row=2, column=3, rowspan = 10, sticky = W+E+N+S, padx = 20, pady = 20)
+		self.Bibtex_widget = Text(frame, highlightbackground= "black")
+		self.Bibtex_widget.grid(row=2, column=4, rowspan = 10, padx = 20, pady =20)
+
+		self.GoButton = Button(frame, text="Search",font=PSDisplay.font_style, width=10, command= self.mainscript, justify = CENTER)
+		self.GoButton.grid(row=6, column=0)
+		self.ResetButton= Button(frame, text="Reset",font=PSDisplay.font_style, width=10, command= self.reset, justify = CENTER)
+		self.ResetButton.grid(row=6, column=1)
+		self.bibtexbutton = Button(frame, text="View bibtex",font=PSDisplay.font_style, width=10, command= self.display_bibtex, justify = CENTER)
+		self.bibtexbutton.grid(row=7, column=0)
+
+		self.Write = Button(frame, text="Write",font=PSDisplay.font_style, width = 10, command = self.WriteBibtex, justify = CENTER)
+		self.Write.grid(row=8, column=0)
+		self.Read = Button(frame, text="Read file",font=PSDisplay.font_style, width = 10, command = self.ReadFile, justify = CENTER)
+		self.Read.grid(row=8, column=1)
+
+	# Wipes the bibtex widget
+	def reset(self):
+		self.Bibtex_widget.delete('1.0', END)
 
 
-Papers_widget = Listbox(INSP,highlightbackground= "black", width = 40)
-Papers_widget.grid(row=2, column=3, rowspan = 10, sticky = W+E+N+S, padx = 10, pady = 10)
+	def mainscript(self):
 
-Bibtex_widget = Text(INSP, highlightbackground= "black")
-Bibtex_widget.grid(row=2, column=4, rowspan = 10, padx = 10, pady =10)
+		self.Papers_widget.delete(0, END)
+
+		self.FirstName  =  self.FN.get()
+		self.SecondName =  self.SN.get()
+		self.NoRecords = self.NoHits.get()
+
+		if self.FirstName =="" and self.SecondName =="":
+			self.warning("Please enter a name!")
+
+		else:	
+			search = Search(self.FirstName, self.SecondName, self.NoRecords)
+			self.currentSearch = search
+
+			try:
+				search.performSearch()
+				Search.display_papers(search.PaperList, self.Papers_widget)
+
+			except:
+				self.warning("No papers found")
 
 
+	def display_bibtex(self):
 
-FirstName  =  ""
-SecondName =  ""
-NoRecords = 0
-WriteFile = ""
+		# This gets the item which has been selected
+		try:
+			item = self.Papers_widget.curselection()[0]
+			self.Bibtex_widget.delete('1.0', END)
+			self.Bibtex_widget.insert('insert', self.currentSearch.PaperList[item].bibtex +"\n")	
 
+		except:
+			self.warning("Please select a paper")	
 
-class Paper():
-
-	def __init__(self, title, author, recid, number_of_citations, bibtex):
-    
-		self.title = title
-		self.author = author
-		self.recid = recid
-		self.number_of_citations = number_of_citations
-		self.bibtex = bibtex
-
-	def show(self):
-
-		authorstring = ""
-		for j in range(len(self.author)):
-			authorstring = authorstring + self.author[j]+ "\n"
 		
+	def ReadFile(self):
 
-		tempstring = self.title + "\n" + authorstring + str(self.number_of_citations) + "\n" + "\n"
+		#clear the bibtex box first
+		self.Bibtex_widget.delete('1.0', END)
+		filename = self.FileName.get()
 
+		if filename == "":
+			self.warning("Please enter a file name!")
 
-		Papers_widget.insert(1, tempstring)
+		else:
+			try:
+				f = open(filename, 'r')
+				self.Bibtex_widget.insert('insert',f.read())
+				f.close()
+			except IOError:
+				self.warning("File not found!")	
 	
-	
-
-PaperList=[]
-
-def makepapers(list):
-	for i in range(len(list)):
-		title_temp = list[i]['title']['title']
-		no_cit = list[i]['number_of_citations']
-		recid_temp = list[i]['recid']
 		
-		bib_url = "https://inspirehep.net/record/" + str(recid_temp) + "/export/hx"    #opens the html with the bibtex entry in it
-		bib = BeautifulSoup(urllib2.urlopen(bib_url).read()).find('pre').contents[0]
+	def WriteBibtex(self):	
+		filename = self.FileName.get()
 
-		s = []
-		for j in range(len(list[i]['authors'])):
-			s.append(list[i]['authors'][j]['full_name'])
+		if filename == "":
+			self.warning("Please enter a file name")
 
-		authors_temp = s
+		elif '.' not in filename:
+			self.warning("Please add a file extension")
 
-		PaperList.append(Paper(title_temp,s,recid_temp,no_cit, bib))
-
-
-def reset():
-	Bibtex_widget.delete('1.0', END)
-
-  
-def display_papers(list, nohits):
-	for i in range(int(nohits)):
-		list[i].show()
+		else:
+			item = self.Papers_widget.curselection()[0]
+			target = open(filename, 'a')
+			target.write(self.currentSearch.PaperList[item].bibtex)
+			target.close()
 
 
-def WriteBibtex():
-	filename = FileName.get()
-	item = Papers_widget.curselection()[0]
-	target = open(filename, 'a')
-	target.write(PaperList[item].bibtex)
-	target.close()
+	def warning(self, message):
+		tkMessageBox.showinfo("Hang on!", message)
+		return False
 
 
 
-def display_bibtex():
-
-	Bibtex_widget.delete('1.0', END)
-	
-	item = Papers_widget.curselection()[0]
-
-	Bibtex_widget.insert('insert', PaperList[item].bibtex)
-	Bibtex_widget.insert('insert',"\n")
-	
-
-def ReadFile():
-	Bibtex_widget.delete('1.0', END)
-
-	filename = FileName.get()
-
-	f = open(filename, 'r')
-	Bibtex_widget.insert('insert',f.read())
-	f.close()
 
 
-def mainscript():
-
-	Papers_widget.delete(0, END)
-
-
-	FirstName  =  FN.get()
-	SecondName =  SN.get()
-	NoRecords = NoHits.get()
-
-	url = "https://inspirehep.net/search?ln=en&p=find+a+" + FirstName + "+"+ SecondName +"&of=recjson&action_search=Search&sf=earliestdate&so=d&ot=recid,number_of_citations,authors,title"
-
-	content = urllib2.urlopen(url).read()
-	test = json.loads(content)
-
-	makepapers(test)
-
-	display_papers(PaperList, NoRecords)
-
-def Quit():
-	exit()
-
-
-GoButton= Button(INSP, text="GO",font=font_style, width=10, command= mainscript, justify = CENTER, pady = 10)
-GoButton.grid(row=6, column=0)
-ResetButton= Button(INSP, text="Reset",font=font_style, width=10, command= reset, justify = CENTER, pady = 10)
-ResetButton.grid(row=6, column=1)
-bibtexbutton = Button(INSP, text="View bibtex",font=font_style, width=10, command= display_bibtex, justify = CENTER, pady = 10)
-bibtexbutton.grid(row=7, column=0)
-ExitButton = Button(INSP, text="Exit?",font=font_style, width = 10, command = Quit, justify = CENTER, pady = 10)
-ExitButton.grid(row=7, column=1)
-
-
-Write = Button(INSP, text="Write?",font=font_style, width = 10, command = WriteBibtex, justify = CENTER, pady = 10)
-Write.grid(row=8, column=0)
-
-Read = Button(INSP, text="Read file?",font=font_style, width = 10, command = ReadFile, justify = CENTER, pady = 10)
-Read.grid(row=8, column=1)
-
-
-mainloop()
-
+if __name__ == '__main__':
+	INSP = Tk()
+	app = PSDisplay(INSP)
+	INSP.mainloop()
 
 
 
